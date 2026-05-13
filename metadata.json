@@ -1,6 +1,6 @@
 {
-  "name": "Gerenciador de Artigos Acadêmicos",
-  "description": "Sistema para gestão de artigos, autores e referências integrando com Supabase.",
+  "name": "BiblioHub",
+  "description": "Uma plataforma minimalista para gestão de artigos científicos, autores e referências bibliográficas.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

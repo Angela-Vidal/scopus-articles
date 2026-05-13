@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+on:
+  # Dispara o deploy sempre que houver um push na branch main
+  push:
+    branches: [main] # Se a sua branch principal se chamar 'master', troque aqui
+
+# Permissões necessárias para o GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Fazer o Build
+        run: npm run build
+        env:
+          # Injeta as variáveis de ambiente baseadas nos seus Secrets do Github
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Corrigir rotas (SPA) para o GitHub Pages
+        # Essa linha resolve o problema de erro 404 ao atualizar a página em projetos React (porque o GH Pages não tem backend pra redirecionar rotas)
+        run: cp dist/index.html dist/404.html
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "./dist"
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
