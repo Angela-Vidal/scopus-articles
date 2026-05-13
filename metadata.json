@@ -1,0 +1,6 @@
+{
+  "name": "Gerenciador de Artigos Acadêmicos",
+  "description": "Sistema para gestão de artigos, autores e referências integrando com Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
