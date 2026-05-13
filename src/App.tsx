@@ -1,7 +1,7 @@
 import {
   Navigate,
   Route,
-  BrowserRouter as Router,
+  HashRouter as Router,
   Routes,
 } from "react-router-dom";
 import { Layout } from "./components/Layout";
@@ -12,7 +12,7 @@ import { ReferencesPage } from "./pages/References";
 
 export default function App() {
   return (
-    <Router basename={import.meta.env.BASE_URL}>
+    <Router>
       <Layout>
         <Routes>
           <Route path="/" element={<Navigate to="/artigos" replace />} />
