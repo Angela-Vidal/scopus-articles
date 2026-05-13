@@ -1,13 +1,18 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { ArticlesPage } from './pages/Articles';
-import { AuthorsPage } from './pages/Authors';
-import { KeywordsPage } from './pages/Keywords';
-import { ReferencesPage } from './pages/References';
+import {
+  Navigate,
+  Route,
+  BrowserRouter as Router,
+  Routes,
+} from "react-router-dom";
+import { Layout } from "./components/Layout";
+import { ArticlesPage } from "./pages/Articles";
+import { AuthorsPage } from "./pages/Authors";
+import { KeywordsPage } from "./pages/Keywords";
+import { ReferencesPage } from "./pages/References";
 
 export default function App() {
   return (
-    <Router>
+    <Router basename={import.meta.env.BASE_URL}>
       <Layout>
         <Routes>
           <Route path="/" element={<Navigate to="/artigos" replace />} />
