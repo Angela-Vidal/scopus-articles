@@ -1,14 +1,9 @@
-import {
-  Navigate,
-  Route,
-  HashRouter as Router,
-  Routes,
-} from "react-router-dom";
-import { Layout } from "./components/Layout";
-import { ArticlesPage } from "./pages/Articles";
-import { AuthorsPage } from "./pages/Authors";
-import { KeywordsPage } from "./pages/Keywords";
-import { ReferencesPage } from "./pages/References";
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { ArticlesPage } from './pages/Articles';
+import { AuthorsPage } from './pages/Authors';
+import { KeywordsPage } from './pages/Keywords';
+import { ReferencesPage } from './pages/References';
 
 export default function App() {
   return (

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
-import { BookOpen, Users, Hash, Quote, Library, FileUp } from 'lucide-react';
+import { BookOpen, Users, Hash, Quote, Library, FileUp, Trash2 } from 'lucide-react';
 import { CsvImportModal } from './CsvImportModal';
+import { ClearDatabaseModal } from './ClearDatabaseModal';
 
 const navItems = [
   { name: 'Artigos', path: '/artigos', icon: BookOpen },
@@ -14,6 +15,7 @@ const navItems = [
 export function Navigation() {
   const location = useLocation();
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   return (
     <>
@@ -22,14 +24,24 @@ export function Navigation() {
           <Library className="w-6 h-6 text-zinc-900" />
           <span className="font-bold text-lg tracking-tight">BiblioHub</span>
           <div className="h-6 w-px bg-zinc-300 mx-2 hidden md:block" />
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-medium rounded-lg transition-colors ml-2"
-            title="Importar CSV"
-          >
-            <FileUp className="w-4 h-4" />
-            <span className="hidden leading-none md:inline">Importar CSV</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-medium rounded-lg transition-colors"
+              title="Importar CSV"
+            >
+              <FileUp className="w-4 h-4" />
+              <span className="hidden leading-none md:inline">Importar CSV</span>
+            </button>
+            <button
+              onClick={() => setIsClearModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-red-50 hover:bg-red-100 text-red-600 font-medium rounded-lg transition-colors border border-red-100"
+              title="Limpar Base"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="hidden leading-none md:inline">Limpar Base</span>
+            </button>
+          </div>
         </div>
         
         <div className="flex items-center gap-1 md:gap-4 overflow-x-auto no-scrollbar">
@@ -59,6 +71,14 @@ export function Navigation() {
           // Em um app simples, talvez seja ok apenas deixar o usuário recarregar ou navegar para buscar
           window.location.reload();
         }} 
+      />
+
+      <ClearDatabaseModal 
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onSuccess={() => {
+          window.location.reload();
+        }}
       />
     </>
   );
