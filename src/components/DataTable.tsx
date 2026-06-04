@@ -1,6 +1,18 @@
-import React, { ReactNode, useState, useMemo, KeyboardEvent, useEffect } from 'react';
-import { cn } from '../lib/utils';
-import { Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Search,
+} from "lucide-react";
+import React, {
+  KeyboardEvent,
+  ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { cn } from "../lib/utils";
 
 interface Column<T> {
   header: string;
@@ -19,7 +31,7 @@ interface TableProps<T> {
   searchPlaceholder?: string;
   itemsPerPage?: number;
   rowActions?: (item: T) => ReactNode;
-  
+
   serverSide?: boolean;
   totalCount?: number;
   currentPage?: number;
@@ -45,8 +57,8 @@ export function DataTable<T extends { id: any }>({
   onSearch,
   onSortChange,
 }: TableProps<T>) {
-  const [internalSearchTerm, setInternalSearchTerm] = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  const [internalSearchTerm, setInternalSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDesc, setSortDesc] = useState(false);
   const [internalCurrentPage, setInternalCurrentPage] = useState(1);
@@ -55,7 +67,7 @@ export function DataTable<T extends { id: any }>({
 
   // Handle Search Input
   const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       if (serverSide && onSearch) {
         onSearch(searchInput);
       } else {
@@ -70,9 +82,9 @@ export function DataTable<T extends { id: any }>({
     setSearchInput(val);
     if (val.length === 0) {
       if (serverSide && onSearch) {
-        onSearch('');
+        onSearch("");
       } else {
-        setInternalSearchTerm('');
+        setInternalSearchTerm("");
       }
       if (!serverSide) setInternalCurrentPage(1);
     }
@@ -83,10 +95,10 @@ export function DataTable<T extends { id: any }>({
     if (serverSide) return data;
     if (!internalSearchTerm) return data;
     const lowerSearch = internalSearchTerm.toLowerCase();
-    return data.filter(item => {
+    return data.filter((item) => {
       // Very simple global search over all values
-      return Object.values(item).some(val => 
-        String(val).toLowerCase().includes(lowerSearch)
+      return Object.values(item).some((val) =>
+        String(val).toLowerCase().includes(lowerSearch),
       );
     });
   }, [data, internalSearchTerm, serverSide]);
@@ -95,7 +107,7 @@ export function DataTable<T extends { id: any }>({
   const sortedData = useMemo(() => {
     if (serverSide) return filteredData;
     if (!sortCol) return filteredData;
-    
+
     return [...filteredData].sort((a: any, b: any) => {
       const aVal = a[sortCol];
       const bVal = b[sortCol];
@@ -121,7 +133,9 @@ export function DataTable<T extends { id: any }>({
   }, [filteredData, sortCol, sortDesc]);
 
   // Handle Pagination
-  const calculatedTotalPages = serverSide ? Math.ceil(totalCount / itemsPerPage) : Math.ceil(sortedData.length / itemsPerPage);
+  const calculatedTotalPages = serverSide
+    ? Math.ceil(totalCount / itemsPerPage)
+    : Math.ceil(sortedData.length / itemsPerPage);
   const totalPages = calculatedTotalPages > 0 ? calculatedTotalPages : 1;
   const paginatedData = useMemo(() => {
     if (serverSide) return sortedData;
@@ -130,7 +144,8 @@ export function DataTable<T extends { id: any }>({
   }, [sortedData, currentPage, itemsPerPage, serverSide]);
 
   const handleSort = (col: Column<T>) => {
-    const key = (col.sortableKey || (typeof col.accessor === 'string' ? col.accessor : null)) as string;
+    const key = (col.sortableKey ||
+      (typeof col.accessor === "string" ? col.accessor : null)) as string;
     if (!key) return;
 
     let newSortCol = sortCol;
@@ -197,13 +212,16 @@ export function DataTable<T extends { id: any }>({
         </div>
       )}
 
-      <div className="overflow-hidden bg-white rounded-xl border border-zinc-200 shadow-sm">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl border border-zinc-200 shadow-sm flex flex-col">
+        <div className="overflow-auto max-h-[65vh] xl:max-h-[calc(100vh-260px)] rounded-t-xl">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-zinc-50/50 border-b border-zinc-200">
+            <thead className="sticky top-0 z-10">
+              <tr>
                 {columns.map((col, idx) => {
-                  const key = (col.sortableKey || (typeof col.accessor === 'string' ? col.accessor : null)) as string;
+                  const key = (col.sortableKey ||
+                    (typeof col.accessor === "string"
+                      ? col.accessor
+                      : null)) as string;
                   const isSortable = !!key;
                   const isSorted = sortCol === key;
 
@@ -212,24 +230,36 @@ export function DataTable<T extends { id: any }>({
                       key={idx}
                       onClick={() => isSortable && handleSort(col)}
                       className={cn(
-                        "px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider select-none",
+                        "px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider select-none bg-zinc-50 shadow-[0_1px_0_0_#e4e4e7]",
                         isSortable && "cursor-pointer hover:bg-zinc-100",
-                        col.className
+                        col.className,
                       )}
                     >
                       <div className="flex items-center gap-1">
                         {col.header}
                         {isSortable && (
                           <div className="flex flex-col text-zinc-300">
-                            <ChevronUp className={cn("w-3 h-3 -mb-1 text-zinc-300", isSorted && !sortDesc && "text-emerald-600")} />
-                            <ChevronDown className={cn("w-3 h-3", isSorted && sortDesc && "text-emerald-600")} />
+                            <ChevronUp
+                              className={cn(
+                                "w-3 h-3 -mb-1 text-zinc-300",
+                                isSorted && !sortDesc && "text-emerald-600",
+                              )}
+                            />
+                            <ChevronDown
+                              className={cn(
+                                "w-3 h-3",
+                                isSorted && sortDesc && "text-emerald-600",
+                              )}
+                            />
                           </div>
                         )}
                       </div>
                     </th>
                   );
                 })}
-                {rowActions && <th className="px-6 py-4 w-12" />}
+                {rowActions && (
+                  <th className="px-6 py-4 w-12 bg-zinc-50 shadow-[0_1px_0_0_#e4e4e7]" />
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
@@ -240,7 +270,7 @@ export function DataTable<T extends { id: any }>({
                     onClick={() => onRowClick?.(item)}
                     className={cn(
                       "group transition-colors duration-150",
-                      onRowClick ? "cursor-pointer hover:bg-emerald-50/50" : ""
+                      onRowClick ? "cursor-pointer hover:bg-emerald-50/50" : "",
                     )}
                   >
                     {columns.map((col, idx) => (
@@ -248,10 +278,10 @@ export function DataTable<T extends { id: any }>({
                         key={idx}
                         className={cn(
                           "px-6 py-4 text-sm text-zinc-600 transition-colors group-hover:text-emerald-950",
-                          col.className
+                          col.className,
                         )}
                       >
-                        {typeof col.accessor === 'function'
+                        {typeof col.accessor === "function"
                           ? col.accessor(item)
                           : (item[col.accessor] as ReactNode)}
                       </td>
@@ -276,15 +306,28 @@ export function DataTable<T extends { id: any }>({
             </tbody>
           </table>
         </div>
-        
+
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between">
             <span className="text-sm text-zinc-500">
-              Mostrando <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> até{' '}
-              <span className="font-medium">{Math.min(currentPage * itemsPerPage, serverSide ? totalCount : sortedData.length)}</span> de{' '}
-              <span className="font-medium">{serverSide ? totalCount : sortedData.length}</span> resultados
+              Mostrando{" "}
+              <span className="font-medium">
+                {(currentPage - 1) * itemsPerPage + 1}
+              </span>{" "}
+              até{" "}
+              <span className="font-medium">
+                {Math.min(
+                  currentPage * itemsPerPage,
+                  serverSide ? totalCount : sortedData.length,
+                )}
+              </span>{" "}
+              de{" "}
+              <span className="font-medium">
+                {serverSide ? totalCount : sortedData.length}
+              </span>{" "}
+              resultados
             </span>
-            
+
             <div className="flex gap-2">
               <button
                 onClick={() => goToPage(Math.max(1, currentPage - 1))}

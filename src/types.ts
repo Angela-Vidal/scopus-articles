@@ -13,6 +13,12 @@ export interface Artigo {
   doi?: string;
   link?: string;
   resumo?: string;
+  issn?: string;
+  isbn?: string;
+  issn_isbn?: string;
+  language_of_original_document?: string;
+  document_type?: string;
+  open_access?: string;
 }
 
 export interface PalavraChave {

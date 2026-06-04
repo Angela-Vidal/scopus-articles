@@ -1,14 +1,21 @@
-import React, { useState, useRef } from 'react';
-import Papa from 'papaparse';
-import { Upload, X, FileUp, CheckCircle, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { AlertCircle, CheckCircle, FileUp, Upload, X } from "lucide-react";
+import Papa from "papaparse";
+import React, { useRef, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PRÉ-REQUISITO: Execute no Supabase SQL Editor ANTES de usar este componente
 // ─────────────────────────────────────────────────────────────────────────────
-// 
-// 1. Adicione restrição de unicidade ao título (necessário para o ON CONFLICT):
+//
+// 1. Adicione restrição de unicidade ao título (necessário para o ON CONFLICT) e as novas colunas:
 // ALTER TABLE public.artigos ADD CONSTRAINT artigos_titulo_unique UNIQUE (titulo);
+//
+// ALTER TABLE public.artigos ADD COLUMN IF NOT EXISTS issn text;
+// ALTER TABLE public.artigos ADD COLUMN IF NOT EXISTS isbn text;
+// ALTER TABLE public.artigos ADD COLUMN IF NOT EXISTS issn_isbn text;
+// ALTER TABLE public.artigos ADD COLUMN IF NOT EXISTS language_of_original_document text;
+// ALTER TABLE public.artigos ADD COLUMN IF NOT EXISTS document_type text;
+// ALTER TABLE public.artigos ADD COLUMN IF NOT EXISTS open_access text;
 //
 // 2. Crie ou atualize a função de lote:
 // CREATE OR REPLACE FUNCTION insert_artigos_batch(artigos jsonb)
@@ -18,7 +25,10 @@ import { supabase } from '../lib/supabase';
 // BEGIN
 //   FOR art IN SELECT * FROM jsonb_array_elements(artigos) LOOP
 //     RETURN QUERY
-//     INSERT INTO public.artigos(titulo, ano, source_titulo, qt_citacao, doi, link, resumo)
+//     INSERT INTO public.artigos(
+//       titulo, ano, source_titulo, qt_citacao, doi, link, resumo,
+//       issn, isbn, issn_isbn, language_of_original_document, document_type, open_access
+//     )
 //     VALUES (
 //       art->>'titulo',
 //       (art->>'ano')::int,
@@ -26,11 +36,23 @@ import { supabase } from '../lib/supabase';
 //       COALESCE((art->>'qt_citacao')::int, 0),
 //       art->>'doi',
 //       art->>'link',
-//       art->>'resumo'
+//       art->>'resumo',
+//       art->>'issn',
+//       art->>'isbn',
+//       art->>'issn_isbn',
+//       art->>'language_of_original_document',
+//       art->>'document_type',
+//       art->>'open_access'
 //     )
-//     ON CONFLICT (titulo) DO UPDATE SET 
+//     ON CONFLICT (titulo) DO UPDATE SET
 //       qt_citacao = EXCLUDED.qt_citacao,
-//       resumo = COALESCE(EXCLUDED.resumo, public.artigos.resumo)
+//       resumo = COALESCE(EXCLUDED.resumo, public.artigos.resumo),
+//       issn = COALESCE(EXCLUDED.issn, public.artigos.issn),
+//       isbn = COALESCE(EXCLUDED.isbn, public.artigos.isbn),
+//       issn_isbn = COALESCE(EXCLUDED.issn_isbn, public.artigos.issn_isbn),
+//       language_of_original_document = COALESCE(EXCLUDED.language_of_original_document, public.artigos.language_of_original_document),
+//       document_type = COALESCE(EXCLUDED.document_type, public.artigos.document_type),
+//       open_access = COALESCE(EXCLUDED.open_access, public.artigos.open_access)
 //     RETURNING id, titulo;
 //   END LOOP;
 // END;
@@ -39,16 +61,21 @@ import { supabase } from '../lib/supabase';
 // ─────────────────────────────────────────────────────────────────────────────
 // Mapeamento CSV Scopus → banco
 // ─────────────────────────────────────────────────────────────────────────────
-// "Title"             → artigos.titulo
-// "Year"              → artigos.ano
-// "Source title"      → artigos.source_titulo   ← nota: "Source title", não "Source"
-// "Cited by"          → artigos.qt_citacao
-// "DOI"               → artigos.doi
-// "Link"              → artigos.link
-// "Abstract"          → artigos.resumo
-// "Author full names" → autores  (separado por ;)
-// "Author Keywords"   → palavras_chaves (separado por ;)
-// "References"        → referencias (separado por ;)
+// "Title"                         → artigos.titulo
+// "Year"                          → artigos.ano
+// "Source title"                  → artigos.source_titulo   ← nota: "Source title", não "Source"
+// "Cited by"                      → artigos.qt_citacao
+// "DOI"                           → artigos.doi
+// "Link"                          → artigos.link
+// "Abstract"                      → artigos.resumo
+// "ISSN"                          → artigos.issn
+// "ISBN"                          → artigos.isbn
+// "Language of Original Document" → artigos.language_of_original_document
+// "Document Type"                 → artigos.document_type
+// "Open Access"                   → artigos.open_access
+// "Author full names"             → autores  (separado por ;)
+// "Author Keywords"               → palavras_chaves (separado por ;)
+// "References"                    → referencias (separado por ;)
 // Todas as demais colunas do Scopus são ignoradas.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -61,18 +88,18 @@ interface CsvImportModalProps {
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-    arr.slice(i * size, i * size + size)
+    arr.slice(i * size, i * size + size),
   );
 }
 
 /** Remove BOM e espaços de chaves de cabeçalho */
 function normalizeKey(key: string): string {
-  return key.trim().replace(/^[\uFEFF\u200B]+/, '');
+  return key.trim().replace(/^[\uFEFF\u200B]+/, "");
 }
 
 /** ID estável para autor (usado como PK em autores.id text) */
 function makeAuthorId(fullName: string): string {
-  return fullName.toLowerCase().replace(/\s+/g, '-').substring(0, 255);
+  return fullName.toLowerCase().replace(/\s+/g, "-").substring(0, 255);
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -82,7 +109,7 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
+  const [progressLabel, setProgressLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
@@ -123,14 +150,14 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
     setSuccess(false);
     setIsImporting(true);
     setProgress(0);
-    setProgressLabel('Lendo arquivo...');
+    setProgressLabel("Lendo arquivo...");
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => runImport(results),
       error: () => {
-        setError('Erro ao analisar o arquivo CSV.');
+        setError("Erro ao analisar o arquivo CSV.");
         setIsImporting(false);
       },
     });
@@ -140,24 +167,27 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
     try {
       const rawData = results.data as Record<string, string>[];
 
-      if (rawData.length === 0) throw new Error('O arquivo CSV está vazio.');
+      if (rawData.length === 0) throw new Error("O arquivo CSV está vazio.");
 
       // Normaliza cabeçalhos (remove BOM do primeiro campo, espaços extras)
       const header = (results.meta.fields ?? []).map(normalizeKey);
 
-      if (!header.includes('Title')) {
+      if (!header.includes("Title")) {
         throw new Error(
           `Coluna "Title" não encontrada.\n` +
-          `Primeiras colunas detectadas: ${header.slice(0, 6).join(', ')}${header.length > 6 ? '...' : ''}\n\n` +
-          `Verifique se o arquivo foi exportado do Scopus com separador vírgula.`
+            `Primeiras colunas detectadas: ${header.slice(0, 6).join(", ")}${header.length > 6 ? "..." : ""}\n\n` +
+            `Verifique se o arquivo foi exportado do Scopus com separador vírgula.`,
         );
       }
 
       // ── 1. Parse e deduplicação em memória ──────────────────────────────────
 
-      setProgressLabel('Processando linhas...');
+      setProgressLabel("Processando linhas...");
 
-      const uniqueAuthors = new Map<string, { id: string; nome: string; nome_completo: string }>();
+      const uniqueAuthors = new Map<
+        string,
+        { id: string; nome: string; nome_completo: string }
+      >();
       const uniqueKeywords = new Set<string>();
       const uniqueReferences = new Set<string>();
 
@@ -170,6 +200,12 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
           doi: string | null;
           link: string | null;
           resumo: string | null;
+          issn: string | null;
+          isbn: string | null;
+          issn_isbn: string | null;
+          language_of_original_document: string | null;
+          document_type: string | null;
+          open_access: string | null;
         };
         authorIds: string[];
         keywordStrings: string[];
@@ -182,34 +218,53 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
         // Normaliza chaves da linha
         const row: Record<string, string> = {};
         for (const key of Object.keys(raw)) {
-          row[normalizeKey(key)] = raw[key] ?? '';
+          row[normalizeKey(key)] = raw[key] ?? "";
         }
 
-        const title = row['Title']?.trim();
+        const title = row["Title"]?.trim();
         if (!title) continue;
 
         // ── Campos do artigo ──────────────────────────────────────────────────
         let yearParsed = null;
-        if (row['Year']) {
-          const y = parseInt(row['Year'], 10);
+        if (row["Year"]) {
+          const y = parseInt(row["Year"], 10);
           if (!isNaN(y)) yearParsed = y;
         }
 
         let citationsParsed = 0;
-        if (row['Cited by']) {
-          const c = parseInt(row['Cited by'], 10);
+        if (row["Cited by"]) {
+          const c = parseInt(row["Cited by"], 10);
           if (!isNaN(c)) citationsParsed = c;
         }
 
         // "Source title" é o nome da coluna no Scopus
+        let abstractVal = row["Abstract"]?.trim() || null;
+        if (
+          abstractVal &&
+          abstractVal.toLowerCase() === "[no abstract available]"
+        ) {
+          abstractVal = null;
+        }
+
+        const issnVal = row["ISSN"]?.trim() || null;
+        const isbnVal = row["ISBN"]?.trim() || null;
+        const issnIsbnVal = issnVal || isbnVal || null;
+
         const article = {
-          titulo:        title,
-          ano:           yearParsed,
-          source_titulo: row['Source title']?.trim()           || null,
-          qt_citacao:    citationsParsed,
-          doi:           row['DOI']?.trim()                    || null,
-          link:          row['Link']?.trim()                   || null,
-          resumo:        row['Abstract']?.trim()               || null,
+          titulo: title,
+          ano: yearParsed,
+          source_titulo: row["Source title"]?.trim() || null,
+          qt_citacao: citationsParsed,
+          doi: row["DOI"]?.trim() || null,
+          link: row["Link"]?.trim() || null,
+          resumo: abstractVal,
+          issn: issnVal,
+          isbn: isbnVal,
+          issn_isbn: issnIsbnVal,
+          language_of_original_document:
+            row["Language of Original Document"]?.trim() || null,
+          document_type: row["Document Type"]?.trim() || null,
+          open_access: row["Open Access"]?.trim() || null,
         };
 
         // ── Autores ───────────────────────────────────────────────────────────
@@ -217,9 +272,9 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
         //   "Souza, R.R. (57218871099); Pimentel, A.D.A. (57218873912)"
         // Extraímos o ID entre parênteses para ser a PK e limpamos o nome.
         const authorIds: string[] = [];
-        const authorsRaw = row['Author full names']?.trim();
+        const authorsRaw = row["Author full names"]?.trim();
         if (authorsRaw) {
-          for (const part of authorsRaw.split(';')) {
+          for (const part of authorsRaw.split(";")) {
             const fullName = part.trim();
             if (!fullName) continue;
 
@@ -250,9 +305,9 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
         // ── Palavras-chave ────────────────────────────────────────────────────
         // "Author Keywords" → "palavra1; palavra2; palavra3"
         const keywordStrings: string[] = [];
-        const kwRaw = row['Author Keywords']?.trim();
+        const kwRaw = row["Author Keywords"]?.trim();
         if (kwRaw) {
-          for (const part of kwRaw.split(';')) {
+          for (const part of kwRaw.split(";")) {
             const kw = part.trim();
             if (!kw) continue;
             uniqueKeywords.add(kw);
@@ -263,9 +318,9 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
         // ── Referências ───────────────────────────────────────────────────────
         // "References" → cada referência separada por ;
         const refStrings: string[] = [];
-        const refRaw = row['References']?.trim();
+        const refRaw = row["References"]?.trim();
         if (refRaw) {
-          for (const part of refRaw.split(';')) {
+          for (const part of refRaw.split(";")) {
             const ref = part.trim();
             if (!ref) continue;
             uniqueReferences.add(ref);
@@ -278,8 +333,8 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
 
       if (validRows.length === 0) {
         throw new Error(
-          'Nenhuma linha válida encontrada. ' +
-          'Verifique se a coluna "Title" está preenchida nas linhas do arquivo.'
+          "Nenhuma linha válida encontrada. " +
+            'Verifique se a coluna "Title" está preenchida nas linhas do arquivo.',
         );
       }
 
@@ -290,7 +345,7 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
       // autores, palavras_chaves e referencias são tabelas independentes.
       // Promise.all os processa ao mesmo tempo.
 
-      setProgressLabel('Salvando autores, palavras-chave e referências...');
+      setProgressLabel("Salvando autores, palavras-chave e referências...");
 
       const [kwMap, refMap] = await Promise.all([
         upsertAuthors(Array.from(uniqueAuthors.values())),
@@ -308,21 +363,32 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
       // artigos.id é bigint GENERATED ALWAYS AS IDENTITY.
       // O JS não suporta bigint nativo em JSON, então o Supabase retorna como string.
 
-      setProgressLabel('Inserindo artigos...');
+      setProgressLabel("Inserindo artigos...");
 
       const articleIdByTitle = new Map<string, string>(); // titulo → id (string de bigint)
 
-      const articleChunks = chunkArray(validRows.map(r => r.article), 200);
+      const articleChunks = chunkArray(
+        validRows.map((r) => r.article),
+        200,
+      );
 
       for (let i = 0; i < articleChunks.length; i++) {
-        const { data: inserted, error: rpcError } = await supabase
-          .rpc('insert_artigos_batch', { artigos: articleChunks[i] });
+        const { data: inserted, error: rpcError } = await supabase.rpc(
+          "insert_artigos_batch",
+          { artigos: articleChunks[i] },
+        );
 
         if (rpcError) {
-          console.error(`RPC error no chunk ${i + 1}/${articleChunks.length}:`, rpcError);
+          console.error(
+            `RPC error no chunk ${i + 1}/${articleChunks.length}:`,
+            rpcError,
+          );
           throw new Error(`Erro ao salvar artigos: ${rpcError.message}`);
         } else {
-          for (const row of (inserted ?? []) as { article_id: any; article_title: string }[]) {
+          for (const row of (inserted ?? []) as {
+            article_id: any;
+            article_title: string;
+          }[]) {
             articleIdByTitle.set(row.article_title, String(row.article_id));
           }
         }
@@ -334,12 +400,18 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
 
       // ── 4. Montar e inserir relações em batch paralelo ───────────────────────
 
-      setProgressLabel('Criando vínculos entre registros...');
+      setProgressLabel("Criando vínculos entre registros...");
 
       // id_artigo é bigint no banco — Supabase aceita como string no JS
-      const allAuthorRelations:   { id_artigo: string; id_autor: string }[]          = [];
-      const allKeywordRelations:  { id_artigo: string; id_palavra_chave: number }[]  = [];
-      const allReferenceRelations:{ id_artigo: string; id_referencia: number }[]     = [];
+      const allAuthorRelations: { id_artigo: string; id_autor: string }[] = [];
+      const allKeywordRelations: {
+        id_artigo: string;
+        id_palavra_chave: number;
+      }[] = [];
+      const allReferenceRelations: {
+        id_artigo: string;
+        id_referencia: number;
+      }[] = [];
 
       for (const row of validRows) {
         const articleId = articleIdByTitle.get(row.article.titulo);
@@ -350,29 +422,36 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
         }
         for (const kw of row.keywordStrings) {
           const kwId = kwMap.get(kw);
-          if (kwId != null) allKeywordRelations.push({ id_artigo: articleId, id_palavra_chave: kwId });
+          if (kwId != null)
+            allKeywordRelations.push({
+              id_artigo: articleId,
+              id_palavra_chave: kwId,
+            });
         }
         for (const ref of row.refStrings) {
           const refId = refMap.get(ref);
-          if (refId != null) allReferenceRelations.push({ id_artigo: articleId, id_referencia: refId });
+          if (refId != null)
+            allReferenceRelations.push({
+              id_artigo: articleId,
+              id_referencia: refId,
+            });
         }
       }
 
       // Paralelo: as três tabelas de junção são independentes
       await Promise.all([
-        insertInChunks('artigo_autor',         allAuthorRelations,    1000),
-        insertInChunks('artigo_palavra_chave', allKeywordRelations,   1000),
-        insertInChunks('artigo_referencia',    allReferenceRelations, 1000),
+        insertInChunks("artigo_autor", allAuthorRelations, 1000),
+        insertInChunks("artigo_palavra_chave", allKeywordRelations, 1000),
+        insertInChunks("artigo_referencia", allReferenceRelations, 1000),
       ]);
 
       setProgress(100);
       setImportedCount(articleIdByTitle.size);
       setSuccess(true);
       setIsImporting(false);
-
     } catch (err: any) {
       console.error(err);
-      setError(err.message ?? 'Erro inesperado durante a importação.');
+      setError(err.message ?? "Erro inesperado durante a importação.");
       setIsImporting(false);
     }
   }
@@ -380,13 +459,13 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
   // ── Helpers de persistência ───────────────────────────────────────────────────
 
   async function upsertAuthors(
-    authors: { id: string; nome: string; nome_completo: string }[]
+    authors: { id: string; nome: string; nome_completo: string }[],
   ): Promise<void> {
     for (const chunk of chunkArray(authors, 500)) {
       const { error } = await supabase
-        .from('autores')
-        .upsert(chunk, { onConflict: 'id', ignoreDuplicates: true });
-      if (error) console.error('Erro ao upsert autores:', error);
+        .from("autores")
+        .upsert(chunk, { onConflict: "id", ignoreDuplicates: true });
+      if (error) console.error("Erro ao upsert autores:", error);
     }
   }
 
@@ -395,20 +474,25 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
    * palavras_chaves.palavra_chave = text UNIQUE
    * → upsert com onConflict retorna o id tanto dos novos quanto dos existentes.
    */
-  async function upsertKeywords(keywords: string[]): Promise<Map<string, number>> {
+  async function upsertKeywords(
+    keywords: string[],
+  ): Promise<Map<string, number>> {
     const kwMap = new Map<string, number>();
 
     for (const chunk of chunkArray(keywords, 500)) {
       const { data, error } = await supabase
-        .from('palavras_chaves')
+        .from("palavras_chaves")
         .upsert(
-          chunk.map(kw => ({ palavra_chave: kw })),
-          { onConflict: 'palavra_chave', ignoreDuplicates: false }
+          chunk.map((kw) => ({ palavra_chave: kw })),
+          { onConflict: "palavra_chave", ignoreDuplicates: false },
         )
-        .select('id, palavra_chave');
+        .select("id, palavra_chave");
 
-      if (error) { console.error('Erro ao upsert keywords:', error); continue; }
-      data?.forEach(e => kwMap.set(e.palavra_chave, Number(e.id)));
+      if (error) {
+        console.error("Erro ao upsert keywords:", error);
+        continue;
+      }
+      data?.forEach((e) => kwMap.set(e.palavra_chave, Number(e.id)));
     }
 
     return kwMap;
@@ -421,18 +505,20 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
    * Dica: se adicionar UNIQUE em conteudo_referencia, pode trocar para
    * upsert igual ao de keywords e ganhar mais performance.
    */
-  async function upsertReferences(refs: string[]): Promise<Map<string, number>> {
+  async function upsertReferences(
+    refs: string[],
+  ): Promise<Map<string, number>> {
     const refMap = new Map<string, number>();
 
     for (const chunk of chunkArray(refs, 500)) {
       // Busca existentes
       const { data: existing } = await supabase
-        .from('referencias')
-        .select('id, conteudo_referencia')
-        .in('conteudo_referencia', chunk);
+        .from("referencias")
+        .select("id, conteudo_referencia")
+        .in("conteudo_referencia", chunk);
 
       const existingSet = new Set<string>();
-      existing?.forEach(e => {
+      existing?.forEach((e) => {
         if (e.conteudo_referencia) {
           existingSet.add(e.conteudo_referencia);
           refMap.set(e.conteudo_referencia, Number(e.id));
@@ -441,20 +527,21 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
 
       // Insere apenas os ausentes
       const missing = chunk
-        .filter(ref => !existingSet.has(ref))
-        .map(ref => ({ conteudo_referencia: ref }));
+        .filter((ref) => !existingSet.has(ref))
+        .map((ref) => ({ conteudo_referencia: ref }));
 
       if (missing.length > 0) {
         const { data: inserted, error } = await supabase
-          .from('referencias')
+          .from("referencias")
           .insert(missing)
-          .select('id, conteudo_referencia');
+          .select("id, conteudo_referencia");
 
         if (error) {
-          console.error('Erro ao inserir referências:', error);
+          console.error("Erro ao inserir referências:", error);
         } else {
-          inserted?.forEach(e => {
-            if (e.conteudo_referencia) refMap.set(e.conteudo_referencia, Number(e.id));
+          inserted?.forEach((e) => {
+            if (e.conteudo_referencia)
+              refMap.set(e.conteudo_referencia, Number(e.id));
           });
         }
       }
@@ -463,7 +550,11 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
     return refMap;
   }
 
-  async function insertInChunks(table: string, rows: any[], chunkSize: number): Promise<void> {
+  async function insertInChunks(
+    table: string,
+    rows: any[],
+    chunkSize: number,
+  ): Promise<void> {
     for (const chunk of chunkArray(rows, chunkSize)) {
       const { error } = await supabase.from(table).insert(chunk);
       if (error) console.error(`Erro ao inserir em ${table}:`, error);
@@ -475,7 +566,6 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col items-center">
-
         {/* Cabeçalho */}
         <div className="w-full flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
@@ -506,8 +596,12 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <p className="text-lg font-bold text-zinc-900">Importação Concluída!</p>
-            <p className="text-sm text-zinc-500">{importedCount} artigo(s) importado(s)</p>
+            <p className="text-lg font-bold text-zinc-900">
+              Importação Concluída!
+            </p>
+            <p className="text-sm text-zinc-500">
+              {importedCount} artigo(s) importado(s)
+            </p>
             <button
               onClick={onClose}
               className="mt-4 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg font-medium transition-all"
@@ -515,7 +609,6 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
               Fechar e Recarregar
             </button>
           </div>
-
         ) : (
           <>
             {/* Drop zone */}
@@ -526,9 +619,9 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
               onClick={() => fileInputRef.current?.click()}
               className={`w-full h-48 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-colors ${
                 isDragActive
-                  ? 'border-emerald-500 bg-emerald-50'
-                  : 'border-zinc-300 hover:border-emerald-400 bg-zinc-50 hover:bg-emerald-50/50'
-              } ${isImporting ? 'opacity-50 pointer-events-none' : ''}`}
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-zinc-300 hover:border-emerald-400 bg-zinc-50 hover:bg-emerald-50/50"
+              } ${isImporting ? "opacity-50 pointer-events-none" : ""}`}
             >
               <input
                 type="file"
@@ -538,12 +631,18 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
                 className="hidden"
                 disabled={isImporting}
               />
-              <FileUp className={`w-10 h-10 mb-3 ${isDragActive ? 'text-emerald-500' : 'text-zinc-400'}`} />
+              <FileUp
+                className={`w-10 h-10 mb-3 ${isDragActive ? "text-emerald-500" : "text-zinc-400"}`}
+              />
               <p className="text-sm font-medium text-zinc-700">
-                {file ? file.name : 'Arraste e solte o CSV aqui, ou clique para selecionar'}
+                {file
+                  ? file.name
+                  : "Arraste e solte o CSV aqui, ou clique para selecionar"}
               </p>
               {!file && (
-                <p className="text-xs text-zinc-500 mt-1">Exportação do Scopus (.csv)</p>
+                <p className="text-xs text-zinc-500 mt-1">
+                  Exportação do Scopus (.csv)
+                </p>
               )}
             </div>
 
@@ -577,10 +676,14 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
             {/* Instruções */}
             {!isImporting && (
               <div className="w-full mt-4 p-4 bg-zinc-50 rounded-lg border border-zinc-200 space-y-2">
-                <p className="text-xs font-semibold text-zinc-700">Colunas utilizadas do Scopus:</p>
+                <p className="text-xs font-semibold text-zinc-700">
+                  Colunas utilizadas do Scopus:
+                </p>
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  Title · Year · Source title · Cited by · DOI · Link · Abstract ·
-                  Author full names · Author Keywords · References
+                  Title · Year · Source title · Cited by · DOI · Link · Abstract
+                  · ISSN · ISBN · Language of Original Document · Document Type
+                  · Open Access · Author full names · Author Keywords ·
+                  References
                 </p>
                 <p className="text-xs text-zinc-400">
                   As demais colunas do Scopus são ignoradas automaticamente.
