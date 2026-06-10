@@ -440,9 +440,24 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
 
       // Paralelo: as três tabelas de junção são independentes
       await Promise.all([
-        insertInChunks("artigo_autor", allAuthorRelations, 1000),
-        insertInChunks("artigo_palavra_chave", allKeywordRelations, 1000),
-        insertInChunks("artigo_referencia", allReferenceRelations, 1000),
+        insertInChunks(
+          "artigo_autor",
+          allAuthorRelations,
+          1000,
+          "id_artigo,id_autor",
+        ),
+        insertInChunks(
+          "artigo_palavra_chave",
+          allKeywordRelations,
+          1000,
+          "id_artigo,id_palavra_chave",
+        ),
+        insertInChunks(
+          "artigo_referencia",
+          allReferenceRelations,
+          1000,
+          "id_artigo,id_referencia",
+        ),
       ]);
 
       setProgress(100);
@@ -554,9 +569,12 @@ export function CsvImportModal({ isOpen, onClose }: CsvImportModalProps) {
     table: string,
     rows: any[],
     chunkSize: number,
+    onConflictStr: string,
   ): Promise<void> {
     for (const chunk of chunkArray(rows, chunkSize)) {
-      const { error } = await supabase.from(table).insert(chunk);
+      const { error } = await supabase
+        .from(table)
+        .upsert(chunk, { onConflict: onConflictStr, ignoreDuplicates: true });
       if (error) console.error(`Erro ao inserir em ${table}:`, error);
     }
   }

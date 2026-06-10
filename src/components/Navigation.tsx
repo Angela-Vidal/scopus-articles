@@ -1,15 +1,25 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { cn } from '../lib/utils';
-import { BookOpen, Users, Hash, Quote, Library, FileUp, Trash2 } from 'lucide-react';
-import { CsvImportModal } from './CsvImportModal';
-import { ClearDatabaseModal } from './ClearDatabaseModal';
+import {
+  BookOpen,
+  FileUp,
+  Hash,
+  LayoutDashboard,
+  Library,
+  Quote,
+  Trash2,
+  Users,
+} from "lucide-react";
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { cn } from "../lib/utils";
+import { ClearDatabaseModal } from "./ClearDatabaseModal";
+import { CsvImportModal } from "./CsvImportModal";
 
 const navItems = [
-  { name: 'Artigos', path: '/artigos', icon: BookOpen },
-  { name: 'Autores', path: '/autores', icon: Users },
-  { name: 'Palavras chaves', path: '/palavras-chave', icon: Hash },
-  { name: 'Referências', path: '/referencias', icon: Quote },
+  { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+  { name: "Artigos", path: "/artigos", icon: BookOpen },
+  { name: "Autores", path: "/autores", icon: Users },
+  { name: "Palavras chaves", path: "/palavras-chave", icon: Hash },
+  { name: "Referências", path: "/referencias", icon: Quote },
 ];
 
 export function Navigation() {
@@ -31,7 +41,9 @@ export function Navigation() {
               title="Importar CSV"
             >
               <FileUp className="w-4 h-4" />
-              <span className="hidden leading-none md:inline">Importar CSV</span>
+              <span className="hidden leading-none md:inline">
+                Importar CSV
+              </span>
             </button>
             <button
               onClick={() => setIsClearModalOpen(true)}
@@ -43,7 +55,7 @@ export function Navigation() {
             </button>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-1 md:gap-4 overflow-x-auto no-scrollbar">
           {navItems.map((item) => (
             <Link
@@ -51,9 +63,9 @@ export function Navigation() {
               to={item.path}
               className={cn(
                 "px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 whitespace-nowrap",
-                location.pathname === item.path 
-                  ? "bg-emerald-600 text-white shadow-sm font-bold" 
-                  : "text-zinc-600 hover:text-zinc-900 hover:bg-emerald-50"
+                location.pathname === item.path
+                  ? "bg-emerald-600 text-white shadow-sm font-bold"
+                  : "text-zinc-600 hover:text-zinc-900 hover:bg-emerald-50",
               )}
             >
               <item.icon className="w-4 h-4" />
@@ -62,18 +74,18 @@ export function Navigation() {
           ))}
         </div>
       </nav>
-      
-      <CsvImportModal 
-        isOpen={isImportModalOpen} 
+
+      <CsvImportModal
+        isOpen={isImportModalOpen}
         onClose={() => {
           setIsImportModalOpen(false);
           // Opcional: Aqui poderíamos disparar um evento global para as páginas recarregarem
           // Em um app simples, talvez seja ok apenas deixar o usuário recarregar ou navegar para buscar
           window.location.reload();
-        }} 
+        }}
       />
 
-      <ClearDatabaseModal 
+      <ClearDatabaseModal
         isOpen={isClearModalOpen}
         onClose={() => setIsClearModalOpen(false)}
         onSuccess={() => {
